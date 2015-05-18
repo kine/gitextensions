@@ -85,7 +85,6 @@ namespace GitUI.Script
             string argument = scriptInfo.Arguments;
 
             string command = OverrideCommandWhenNecessary(originalCommand);
-
             var allSelectedRevisions = new List<GitRevision>();
 
             GitRevision selectedRevision = null;
@@ -316,19 +315,34 @@ namespace GitUI.Script
                             argument = argument.Replace(option, Prompt.UserInput);
                         }
                         break;
+                    case "{WorkingDir}":
+                        argument = argument.Replace(option, aModule.WorkingDir);
+                        break;
                 }
             }
+            command = ExpandCommandVariables(command,aModule);
 
-            if (!scriptInfo.RunInBackground)
-                FormProcess.ShowDialog(owner, command, argument, aModule.WorkingDir, null, true);
-            else
+            if (scriptInfo.IsPowerShell)
             {
-                if (originalCommand.Equals("{openurl}", StringComparison.CurrentCultureIgnoreCase))
-                    Process.Start(argument);
+                PowerShellHelper.RunPowerShell(command, argument, aModule.WorkingDir, scriptInfo.RunInBackground);
+                return false;
+            } else
+                if (!scriptInfo.RunInBackground)
+                    FormProcess.ShowDialog(owner, command, argument, aModule.WorkingDir, null, true);
                 else
-                    aModule.RunExternalCmdDetached(command, argument);
-            }
+                {
+                    if (originalCommand.Equals("{openurl}", StringComparison.CurrentCultureIgnoreCase))
+                        Process.Start(argument);
+                    else
+                        aModule.RunExternalCmdDetached(command, argument);
+                }
             return !scriptInfo.RunInBackground;
+        }
+
+        private static string ExpandCommandVariables(string originalCommand, GitModule aModule)
+        {
+            return originalCommand.Replace("{WorkingDir}", aModule.WorkingDir);
+           
         }
 
         private static GitRevision CalculateSelectedRevision(RevisionGrid revisionGrid, List<GitRef> selectedRemoteBranches,
@@ -426,7 +440,8 @@ namespace GitUI.Script
                         "{cDefaultRemote}",
                         "{cDefaultRemoteUrl}",
                         "{cDefaultRemotePathFromUrl}",
-                        "{UserInput}"
+                        "{UserInput}",
+                        "{WorkingDir}"
                     };
                 return options;
             }

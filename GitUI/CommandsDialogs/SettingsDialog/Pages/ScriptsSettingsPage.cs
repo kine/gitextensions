@@ -16,6 +16,9 @@ namespace GitUI.CommandsDialogs.SettingsDialog.Pages
         private readonly TranslationString _scriptSettingsPageHelpDisplayContent = new TranslationString(@"User Input:
 {UserInput}
 
+Working Dir:
+{WorkingDir}
+
 Selected Commits:
 {sHashes}
 
@@ -141,6 +144,7 @@ Current Branch:
             commandTextBox.Text = scriptInfo.Command;
             argumentsTextBox.Text = scriptInfo.Arguments;
             scriptRunInBackground.Checked = scriptInfo.RunInBackground;
+            scriptIsPowerShell.Checked = scriptInfo.IsPowerShell;
             inMenuCheckBox.Checked = scriptInfo.AddToRevisionGridContextMenu;
             scriptEnabled.Checked = scriptInfo.Enabled;
             scriptNeedsConfirmation.Checked = scriptInfo.AskConfirmation;
@@ -187,6 +191,7 @@ Current Branch:
                 selectedScriptInfo.AddToRevisionGridContextMenu = inMenuCheckBox.Checked;
                 selectedScriptInfo.Enabled = scriptEnabled.Checked;
                 selectedScriptInfo.RunInBackground = scriptRunInBackground.Checked;
+                selectedScriptInfo.IsPowerShell = scriptIsPowerShell.Checked;
                 selectedScriptInfo.AskConfirmation = scriptNeedsConfirmation.Checked;
                 selectedScriptInfo.OnEvent = (ScriptEvent)scriptEvent.SelectedItem;
                 selectedScriptInfo.Icon = IconName;

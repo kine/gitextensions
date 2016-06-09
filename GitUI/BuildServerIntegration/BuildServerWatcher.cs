@@ -111,30 +111,43 @@ namespace GitUI.BuildServerIntegration
                         var protectedData = new byte[stream.Length];
 
                         stream.Read(protectedData, 0, (int)stream.Length);
-
-                        byte[] unprotectedData = ProtectedData.Unprotect(protectedData, null, DataProtectionScope.CurrentUser);
-                        using (var memoryStream = new MemoryStream(unprotectedData))
+                        try
                         {
-                            ConfigFile credentialsConfig = new ConfigFile("", false);
-
-                            using (var textReader = new StreamReader(memoryStream, Encoding.UTF8))
+                            byte[] unprotectedData = ProtectedData.Unprotect(protectedData, null,
+                                DataProtectionScope.CurrentUser);
+                            using (var memoryStream = new MemoryStream(unprotectedData))
                             {
-                                credentialsConfig.LoadFromString(textReader.ReadToEnd());
-                            }
+                                ConfigFile credentialsConfig = new ConfigFile("", false);
 
-                            ConfigSection section = credentialsConfig.FindConfigSection(CredentialsConfigName);
-
-                            if (section != null)
-                            {
-                                buildServerCredentials.UseGuestAccess = section.GetValueAsBool(UseGuestAccessKey, true);
-                                buildServerCredentials.Username = section.GetValue(UsernameKey);
-                                buildServerCredentials.Password = section.GetValue(PasswordKey);
-
-                                if (useStoredCredentialsIfExisting)
+                                using (var textReader = new StreamReader(memoryStream, Encoding.UTF8))
                                 {
-                                    return buildServerCredentials;
+                                    credentialsConfig.LoadFromString(textReader.ReadToEnd());
+                                }
+
+                                ConfigSection section = credentialsConfig.FindConfigSection(CredentialsConfigName);
+
+                                if (section != null)
+                                {
+                                    buildServerCredentials.UseGuestAccess = section.GetValueAsBool(UseGuestAccessKey,
+                                        true);
+                                    buildServerCredentials.Username = section.GetValue(UsernameKey);
+                                    buildServerCredentials.Password = section.GetValue(PasswordKey);
+
+                                    if (useStoredCredentialsIfExisting)
+                                    {
+                                        return buildServerCredentials;
+                                    }
                                 }
                             }
+                        }
+                        catch (CryptographicException)
+                        {
+                            // As per MSDN, the ProtectedData.Unprotect method is per user,
+                            // it will throw the CryptographicException if the current user 
+                            // is not the one who protected the data.
+
+                            // Set this variable to false so the user can reset the credentials.
+                            useStoredCredentialsIfExisting = false;
                         }
                     }
                 }
@@ -254,36 +267,30 @@ namespace GitUI.BuildServerIntegration
             var buildServerType = Module.EffectiveSettings.BuildServer.Type.Value;
             if (string.IsNullOrEmpty(buildServerType))
                 return null;
-            try
-            {
-                var exports = ManagedExtensibility.CompositionContainer.GetExports<IBuildServerAdapter, IBuildServerTypeMetadata>();
-                var export = exports.SingleOrDefault(x => x.Metadata.BuildServerType == buildServerType);
+            var exports = ManagedExtensibility.GetExports<IBuildServerAdapter, IBuildServerTypeMetadata>();
+            var export = exports.SingleOrDefault(x => x.Metadata.BuildServerType == buildServerType);
 
-                if (export != null)
+            if (export != null)
+            {
+                try
                 {
-                    try
+                    var canBeLoaded = export.Metadata.CanBeLoaded;
+                    if (!canBeLoaded.IsNullOrEmpty())
                     {
-                        var canBeLoaded = export.Metadata.CanBeLoaded;
-                        if (!canBeLoaded.IsNullOrEmpty())
-                        {
-                            System.Diagnostics.Debug.Write(export.Metadata.BuildServerType + " adapter could not be loaded: " + canBeLoaded);
-                            return null;
-                        }
-                        var buildServerAdapter = export.Value;
-                        buildServerAdapter.Initialize(this, Module.EffectiveSettings.BuildServer.TypeSettings);
-                        return buildServerAdapter;
+                        System.Diagnostics.Debug.Write(export.Metadata.BuildServerType + " adapter could not be loaded: " + canBeLoaded);
+                        return null;
                     }
-                    catch (InvalidOperationException ex)
-                    {
-                        Debug.Write(ex);
-                        // Invalid arguments, do not return a build server adapter
-                    }
+                    var buildServerAdapter = export.Value;
+                    buildServerAdapter.Initialize(this, Module.EffectiveSettings.BuildServer.TypeSettings);
+                    return buildServerAdapter;
+                }
+                catch (InvalidOperationException ex)
+                {
+                    Debug.Write(ex);
+                    // Invalid arguments, do not return a build server adapter
                 }
             }
-            catch (System.Reflection.ReflectionTypeLoadException)
-            {
-                Trace.WriteLine("GetExports() failed");
-            }
+
             return null;
         }
 

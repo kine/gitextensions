@@ -73,8 +73,15 @@ namespace GitUI.AutoCompletion
             if (File.Exists(path))
                 return File.ReadLines(path);
 
-            using (var sr = new StreamReader(Assembly.GetEntryAssembly().GetManifestResourceStream("GitExtensions.AutoCompleteRegexes.txt")))
-                return sr.ReadToEnd().Split(new char[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+            Stream s = Assembly.GetEntryAssembly().GetManifestResourceStream("GitExtensions.AutoCompleteRegexes.txt");
+            if (s == null)
+                {
+                    throw new NotImplementedException("Please add AutoCompleteRegexes.txt file into .csproj");
+            }
+            using (var sr = new StreamReader (s))
+            {
+                return sr.ReadToEnd ().Split (new char[] { '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+            }
         }
 
         private static Dictionary<string, Regex> ParseRegexes ()
@@ -111,7 +118,15 @@ namespace GitUI.AutoCompletion
             if (content != null)
                 return content;
 
-            return File.ReadAllText(Path.Combine(module.WorkingDir, file.Name));
+            // Try to read the contents of the file: if it cannot be read, skip the operation silently.
+            try
+            {
+                return File.ReadAllText(Path.Combine(module.WorkingDir, file.Name));
+            }
+            catch
+            {
+                return "";
+            }
         }
     }
 }

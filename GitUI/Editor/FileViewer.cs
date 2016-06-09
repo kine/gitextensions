@@ -13,6 +13,7 @@ using GitUI.Hotkey;
 using ICSharpCode.TextEditor.Util;
 using PatchApply;
 using GitCommands.Settings;
+using GitUI.Editor.Diff;
 using ResourceManager;
 
 namespace GitUI.Editor
@@ -35,11 +36,7 @@ namespace GitUI.Editor
 
             GitUICommandsSourceSet += FileViewer_GitUICommandsSourceSet;
 
-            if (GitCommands.Utils.EnvUtils.RunningOnWindows())
-                _internalFileViewer = new FileViewerWindows();
-            else
-                _internalFileViewer = new FileViewerMono();
-
+            _internalFileViewer = new FileViewerInternal();
             _internalFileViewer.MouseEnter += _internalFileViewer_MouseEnter;
             _internalFileViewer.MouseLeave += _internalFileViewer_MouseLeave;
             _internalFileViewer.MouseMove += _internalFileViewer_MouseMove;
@@ -406,7 +403,7 @@ namespace GitUI.Editor
         public void ViewPatch(string text)
         {
             ResetForDiff();
-            _internalFileViewer.SetText(text);
+            _internalFileViewer.SetText(text, isDiff: true);
             if (TextLoaded != null)
                 TextLoaded(this, null);
             RestoreCurrentScrollPos();
@@ -723,13 +720,28 @@ namespace GitUI.Editor
                             code = " " + code;
 
                     string[] lines = code.Split('\n');
-                    char[] specials = new char[] { ' ', '-', '+' };
-                    lines.Transform(s => s.Length > 0 && specials.Any(c => c == s[0]) ? s.Substring(1) : s);
+                    lines.Transform(RemovePrefix);
                     code = string.Join("\n", lines);
                 }
             }
 
             Clipboard.SetText(DoAutoCRLF(code));
+        }
+
+        private string RemovePrefix(string line)
+        {
+            var isCombinedDiff = DiffHighlightService.IsCombinedDiff(_internalFileViewer.GetText());
+            var specials = isCombinedDiff ? new[]{"  ", "++", "+ ", " +", "--", "- ", " -"}
+                : new[]{ " ", "-", "+" };
+            if(string.IsNullOrWhiteSpace(line))
+            {
+                return line;
+            }
+            foreach (var special in specials.Where(line.StartsWith))
+            {
+                return line.Substring(special.Length);
+            }
+            return line;
         }
 
         private void CopyPatchToolStripMenuItemClick(object sender, EventArgs e)
@@ -796,8 +808,7 @@ namespace GitUI.Editor
             for (var line = firstVisibleLine + 1; line < totalNumberOfLines; line++)
             {
                 var lineContent = _internalFileViewer.GetLineText(line);
-                if (lineContent.StartsWithAny(new string[] { "+", "-" })
-                    && !lineContent.StartsWithAny(new string[] { "++", "--" }))
+                if (IsDiffLine(_internalFileViewer.GetText(), lineContent))
                 {
                     if (emptyLineCheck)
                     {
@@ -814,6 +825,13 @@ namespace GitUI.Editor
 
             //Do not go to the end of the file if no change is found
             //TextEditor.ActiveTextAreaControl.TextArea.TextView.FirstVisibleLine = totalNumberOfLines - TextEditor.ActiveTextAreaControl.TextArea.TextView.VisibleLineCount;
+        }
+
+        private static bool IsDiffLine(string wholeText, string lineContent)
+        {
+            var isCombinedDiff = DiffHighlightService.IsCombinedDiff(wholeText);
+            return lineContent.StartsWithAny(isCombinedDiff ? new[] {"+", "-", " +", " -"}
+                : new[] {"+", "-"});
         }
 
         private void PreviousChangeButtonClick(object sender, EventArgs e)
@@ -977,6 +995,10 @@ namespace GitUI.Editor
 
         private void goToLineToolStripMenuItem_Click(object sender, EventArgs e)
         {
+            if (!_internalFileViewer.IsGotoLineUIApplicable())
+            {
+                return;
+            }
             using (FormGoToLine formGoToLine = new FormGoToLine())
             {
                 formGoToLine.SetMaxLineNumber(_internalFileViewer.TotalNumberOfLines);
@@ -1073,7 +1095,7 @@ namespace GitUI.Editor
             }
         }
 
-        /// <summary> 
+        /// <summary>
         /// Clean up any resources being used.
         /// </summary>
         /// <param name="disposing">true if managed resources should be disposed; otherwise, false.</param>

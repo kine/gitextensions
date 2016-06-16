@@ -223,10 +223,10 @@ namespace TfsInterop
                     _urlPrefix = "http://" + hostname + ":8080/tfs/" + (String.IsNullOrEmpty(teamCollection) ? "" : teamCollection + "/") + projectName + "/_build?_a=summary&buildId=";
                 }
 
-                VssConnection connection = new VssConnection(new Uri(url), new VssClientCredentials());
+                VssConnection connection = new VssConnection(new Uri(url), new VssCredentials(true));
                 
                 connection.Settings.BypassProxyOnLocal = false;
-                BuildHttpClient buildClient = await connection.GetClientAsync<BuildHttpClient>();
+                BuildHttpClient buildClient = connection.GetClientAsync<BuildHttpClient>().Result;
                 var definitions = await buildClient.GetDefinitionsAsync(project: projectName,
                                                                     type: DefinitionType.Build);
                 var buildDefs = new List<DefinitionReference>();
